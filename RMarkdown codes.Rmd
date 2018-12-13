@@ -1,0 +1,257 @@
+---
+title: "Assignment_1"
+author: "Burcin_Sarac_FT18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This is an R Markdown document. I have to begin with setting my working directory to read data. And I also add the necessary packages at this stage. 
+
+```{r warning=FALSE, message=FALSE}
+setwd("E:/dersler/Statistics 1/assignment 3")
+library(tidyverse)
+library(foreign)
+library(nortest)
+library(Hmisc)
+library(car)
+library(gmodels)
+```
+
+## Q1
+
+```{r warning=FALSE, message=FALSE}
+salary <- read.spss("salary.sav", to.data.frame = T)
+str(salary)
+```
+There are 474 observations and 11 variables listed in the dataset.
+$sex, $jobcat, $minority, $sexrace are categorical variables and their datatype are "Factor". The remaining variables are numerical variables and their type are "num". 
+
+## Q2
+
+I dropped id column because it is duplicated with row names and also check if there is any NA variables in dataset, before getting summary statistics.
+
+```{r}
+salary <- salary[,-1]
+sum(which(is.na(salary)))
+```
+
+It seems there is not any missing data, so I continue with summary statistics;
+
+```{r}
+summary(salary)
+```
+
+From data summary, both max data values in begining salary and current salary might be an outlier. For checking this I try to find if it is same row or not. 
+
+```{r}
+salary[which(salary$salbeg==max(salary$salbeg)),]
+```
+It seems correct, because this row both includes max beginning and current salary values.
+
+After that, histograms drawn for all numerical variables below;
+
+```{r}
+for(i in 1:ncol(salary)){
+    if (class(salary[,i]) == "numeric"){
+    hist(salary[i])
+}}
+```
+
+It seen from summary of data and histograms, I can roughly say that, none of numerical variables distibuted normally. 
+
+## Q3
+
+Firstly, for analyzing begining salary, I create a new data called "beginning" includes only beginning salary data, and test for normality with Liliefors(Kolmogorov-Smirnov) and Shapiro tests.
+
+
+```{r}
+beginning <- salary$salbeg
+lillie.test(beginning)
+shapiro.test(beginning)
+qqnorm(beginning)
+qqline(beginning)
+```
+Both tests and QQ Plot shows that, P-value is very small and it means I reject the null Hypothesis, which assumes data is normally distributed. 
+So because of the beginning salary does not normally distributed,I need to check sample size and location of mean and median if they are close or not. 
+
+```{r}
+multifunctions <- function(x){
+  c(length=length(x),mean=mean(x),median=median(x))
+}
+multifunctions(beginning)
+```
+
+The sample size is larger than 50 and as long as this is a subjective decision to make, I assume the values of mean and median are closely located. So I will use one sample t-test for my continous variable although it does not normally distributed.
+This time my null hypothesis is mu=1000, and I will do two tailed test, which means my alternative hypothesis is mean!=1000
+
+```{r}
+t.test(beginning, mu=1000)
+```
+
+According to t-test results, P-Value is remarkably small, which means I reject my null hypothesis. With this result, I can say that "At 95% siginificance level beginning salary of a typical employee does not equal to 1000 dollars."
+
+## Q4
+
+This time for testing difference between beginning salary and the current salary, I need to create a dataset only includes difference between them. 
+
+```{r}
+diff <- salary$salnow - salary$salbeg
+```
+
+And after this, according to set up a hypothesis for two dependent samples, I check normality with Liliefors(Kolmogorov-Smirnov) and Shapiro tests as before and also draw a QQ Plot for checking.
+
+```{r}
+lillie.test(diff)
+shapiro.test(diff)
+qqnorm(diff)
+qqline(diff)
+```
+
+It seem from normality tests that difference data is not normally distibuted. So I again check the sample size and location of mean and median;
+
+```{r}
+multifunctions(diff)
+```
+
+Different from before, their locations are not closed. So I will use Wilcoxon Test for my hypothesis. In this case due to checking any significant difference between beginning and current salaries, my null hypothesis is mu=0, means that there is not any significant difference between beginning and current salaries and alternative hypothesis is mu!=0.
+
+```{r}
+wilcox.test(diff, mu=0)
+boxplot(salary$salbeg, salary$salnow)
+boxplot(diff)
+```
+
+According to Wilcoxon-test results, P-Value is remarkably small, which means I reject my null hypothesis.It can also be seen from boxplots that the beginning salary plot is positioned in a lower level than current salary plot and for the second boxplot, there is a significant difference can observed as well. 
+With this result, I can say that "At 95% siginificance level there is a significant difference between the beginning salary and current salary."
+
+## Q5
+
+In this question, it is needed to comparene categorical and one continous variable. Before testing our null hypothesis, which assumes there is not any differences between genders in terms of the beginning salary, I need to test normality in each sample. Additionally, I prefer to separate beginning salaries between males and females for easy interpretion.
+
+```{r}
+males <- salary$salbeg[salary$sex=="MALES"]
+females <- salary$salbeg[salary$sex=="FEMALES"]
+by(salary$salbeg, salary$sex, lillie.test)
+by(salary$salbeg, salary$sex, shapiro.test)
+```
+
+According to the normality tests, due to low p-value, I reject null hypothesis, which assumes both samples are normally distributed. After determine that the samples are not normally distibuted, I check sample size and mean if it is a sufficient measure for central location on both samples. 
+
+```{r}
+multifunctions(males)
+multifunctions(females)
+```
+
+Samples are large enough, however difference between mean and median is large, so I will test for zero difference between medians through Wilcoxon Rank-sum test. 
+
+```{r}
+by(salary$salbeg, salary$sex, wilcox.test)
+boxplot(males, females)
+```
+
+Due to Wilcoxon test, p-value is far lower than significance level. So I reject null hypothesis, which assumes medians of beginning salary of males and beginning salary of females equal to zero. With this I can say that,  "At 95% siginificance level there is a significant difference between the beginning salary between two genders."
+
+## Q6
+
+For cutting age variable into 3 ranges and doing it equally, I use cut2 function and create a age_cut column to keep it. And this time I will compare beginning salary as one continous variable in terms of age_cut levels as 3 categorical variables, because of this I will use anova for testing normality.
+
+```{r}
+salary$age_cut <- cut2(salary$age, g=3)   
+anova <- aov(salbeg~age_cut, salary)
+summary(anova)
+lillie.test(anova$residuals)
+shapiro.test(anova$residuals)
+qqnorm(anova$residuals)
+qqline(anova$residuals)
+```
+
+According to p-values in normality tests, I reject null hypothesis, in other words the samples are not normally distributed. So I check size of samples and as I know they are big enough to continue testing, I will also check the locations of mean and median in all ranges. 
+
+```{r}
+young <- salary$age[salary$age_cut=="[23.0,29.7)"]
+middle <- salary$age[salary$age_cut=="[29.7,39.8)"]
+old <- salary$age[salary$age_cut=="[39.8,64.5]"]
+
+multifunctions(young)
+multifunctions(middle)
+multifunctions(old)
+```
+
+It seems that mean and median values are close in both samples, so I will test if variances are equal or not with Bartlett test, Fligner-Killeen test and Levene's test. 
+
+```{r}
+bartlett.test(salbeg~age_cut, salary)
+fligner.test(salbeg~age_cut, salary)
+leveneTest(salbeg~age_cut, salary)
+```
+
+Due to lower p-values than significance level, I again reject my null hypothesis, which assumes equal variances. So after determine that variances are not equal, I will continue with one-way test and Kruskal Wallis rank sum test. 
+
+```{r}
+oneway.test(salbeg~age_cut, salary, var.equal=FALSE)
+kruskal.test(salbeg~age_cut, salary)
+```
+
+The p-value again lower than significance level, which leads me to reject null hypothesis assumed equal means with unequal variances. So I continue with Pairwise comparison test.
+
+```{r}
+boxplot(salary$salbeg~salary$age_cut)
+pairwise.t.test(salary$salbeg, salary$age_cut, pool.sd = F)
+```
+
+Again Pairwise test shows that p-value is lower. So I reject null hypothesis, which assumes age level has not significant effect in beginning salary. So I can say that "At 95% siginificance level there is a significant difference between the beginning salary between three age groups, which age ranges are [23.0,29.7),[29.7,39.8) and [39.8,64.5]."
+Moreover due to pairwise comparison table, I can say that there is a significant difference between [29.7,39.8) and [23.0,29.7) age ranges with a very low p-value, but there is less significant difference between ages [23.0,29.7) and [39.8,64.5].
+
+## Q7
+
+In this question I will test if proportions are equal with "white" and "males" data to "white" and "females" data in sex and minority columns accordingly. For testing this two categorical variables, I will first check the number of samples via contingency and probability tables. 
+
+```{r}
+(tab <- table(salary$sex, salary$minority))
+prop.table(tab)
+prop.table(tab,1)
+prop.table(tab,2)
+```
+
+After checking data via tables, it seems that the probabilities are close and for the first thought assumption in the null hypothesis might be true, but I will decide it at later stages of analysis. Now I will use prop.test to implement the Pearson's chi-square statistics for independence and also check the Pearson's Chi-squared test with Yates continuity correction via chisq.test().
+
+```{r}
+prop.test(tab)
+chisq.test(tab)
+```
+
+It seems from both tests that p-value is larger than significance level(0.05), so I cannot reject null hypothesis. 
+However, although R did not give any warning and all expected values seems larger than 5 in Chi-squared test, because of Chi-squared test is an aproximation test, I would like to do Fisher test as well and I will also prepare a crosstable of tests.
+
+```{r}
+fisher.test(tab)
+CrossTable(tab, digits = 1, format = "SPSS", prop.r = T, 
+           chisq = T, fisher = T)
+```
+
+
+All tests supports the decision via p-values which is about, not to reject null hypothesis.In other words, in 95% significance level I assume that the gender and minority are independent variables, which means gender does not effect minority of employee and the proportions of "White males" and "white females" data are equal. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
